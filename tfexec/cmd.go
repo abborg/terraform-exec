@@ -57,7 +57,6 @@ var prohibitedEnvVars = []string{
 }
 
 var prohibitedEnvVarPrefixes = []string{
-	varEnvVarPrefix,
 	cliArgEnvVarPrefix,
 }
 
@@ -135,11 +134,8 @@ func envSlice(environ map[string]string) []string {
 // for example User Agent data set via ENVs.
 func (tf *Terraform) buildEnv(mergeEnv map[string]string) []string {
 	// set Terraform level env, if env is nil, fall back to os.Environ
-	var env map[string]string
-	if tf.env == nil {
-		env = envMap(os.Environ())
-	} else {
-		env = make(map[string]string, len(tf.env))
+	env := envMap(os.Environ())
+	if tf.env != nil {
 		maps.Copy(env, tf.env)
 	}
 
