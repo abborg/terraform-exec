@@ -49,6 +49,15 @@ func defaultEnv() []string {
 	}
 }
 
+func stripOsEnv(env map[string]string) {
+	libManaged := envMap(defaultEnv())
+	for k := range env {
+		if _, ok := libManaged[k]; !ok {
+			delete(env, k)
+		}
+	}
+}
+
 // assertCmd asserts that a constructed exec.Cmd contains the expected args and environment variables.
 // The command itself isn't executed; that is only done in E2E tests.
 func assertCmd(t *testing.T, expectedArgs []string, expectedEnv map[string]string, actual *exec.Cmd) {
@@ -69,6 +78,8 @@ func assertCmd(t *testing.T, expectedArgs []string, expectedEnv map[string]strin
 	// check environment
 	expectedEnv = envMap(append(defaultEnv(), envSlice(expectedEnv)...))
 	actualEnv := envMap(actual.Env)
+
+	stripOsEnv(actualEnv)
 
 	if len(actualEnv) != len(actual.Env) {
 		t.Fatalf("duplication in actual env, unable to assert: %v", actual.Env)
@@ -99,6 +110,33 @@ func assertCmd(t *testing.T, expectedArgs []string, expectedEnv map[string]strin
 		}
 		if ev != av {
 			t.Fatalf("env mismatch, expected %q, got %q\n\nfull expected:\n%v\n\nfull actual:\n%v", ev, av, envSlice(expectedEnv), envSlice(actualEnv))
+		}
+	}
+}
+
+func TestBuildEnvSetEnvDoesNotStripOsEnv(t *testing.T) {
+	td := t.TempDir()
+	tf, err := NewTerraform(td, "echo")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Setenv("HOME", "/test/home")
+	t.Setenv("AWS_REGION", "us-east-1")
+
+	if err := tf.SetEnv(map[string]string{"TF_PLUGIN_CACHE_DIR": "/cache"}); err != nil {
+		t.Fatal(err)
+	}
+
+	env := envMap(tf.buildTerraformCmd(t.Context(), nil).Env)
+
+	for k, want := range map[string]string{
+		"HOME":                "/test/home",
+		"AWS_REGION":          "us-east-1",
+		"TF_PLUGIN_CACHE_DIR": "/cache",
+	} {
+		if got := env[k]; got != want {
+			t.Fatalf("expected %q=%q in cmd env after SetEnv, got %q", k, want, got)
 		}
 	}
 }
